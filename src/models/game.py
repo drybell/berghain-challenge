@@ -3,6 +3,8 @@ from core.datatypes.sequence  import Sequence
 from pydantic import BaseModel, RootModel, UUID4, PrivateAttr
 from enum import StrEnum, IntEnum
 
+import pandas as pd
+
 class GameStatus(StrEnum):
     RUNNING   = 'running'
     COMPLETED = 'completed'
@@ -56,7 +58,7 @@ class GameConstraint(BaseModel):
 class UnknownPersonAttributes(RootModel[dict[str, bool]]):
     ...
 
-class PersonAttributes(BaseModel):
+class PersonAttributes(BaseModel, extra='forbid'):
     ...
 
 class Person(BaseModel):
@@ -69,10 +71,10 @@ class Person(BaseModel):
 class UnknownRelativeFrequencies(RootModel[dict[str, float]]):
     ...
 
-class UnknownCorrelations(RootModel[dict[str, float]]):
+class UnknownCorrelations(RootModel[dict[str, dict[str, float]]]):
     ...
 
-class RelativeFrequencies(BaseModel):
+class RelativeFrequencies(BaseModel, extra='forbid'):
     """
     Note: This was left intentially blank in the beginning since
     we don't know the attributes beforehand. This model was
@@ -83,7 +85,7 @@ class RelativeFrequencies(BaseModel):
     well_dressed : float | None = None
     young        : float | None = None
 
-class Correlations(BaseModel):
+class Correlations(BaseModel, extra='forbid'):
     """
     See RelativeFrequencies docstr
     """
@@ -127,3 +129,38 @@ DecideNextResponseT = (
     | FailedDecideNextResponse
 )
 
+class GameData(BaseModel):
+    id : UUID4
+    constraints  : Sequence[GameConstraint]
+    frequencies  : dict
+    correlations : dict
+
+    @classmethod
+    def from_new_game(cls, game):
+        freqs = game.attributeStatistics.relativeFrequencies
+        corr  = game.attributeStatistics.correlations
+
+        match freqs:
+            case UnknownRelativeFrequencies():
+                freqs = freqs.root
+            case _:
+                freqs = freqs.model_dump()
+
+        match corr:
+            case UnknownCorrelations():
+                corr = corr.root
+            case _:
+                corr = corr.model_dump()
+
+        return cls(
+            id=game.gameId
+            , constraints=game.constraints
+            , frequencies=freqs
+            , correlations=corr
+        )
+
+    def gen_correlation_matrix_df(self) -> pd.DataFrame:
+        return pd.DataFrame(self.correlations)
+
+    def gen_requirements_df(self) -> pd.DataFrame:
+        return pd.DataFrame(self.constraints.model_dump())
