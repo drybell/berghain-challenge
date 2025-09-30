@@ -16,6 +16,7 @@ from models.game import (
 import utils
 
 from pydantic import BaseModel, AnyUrl
+from typing import Any
 
 class BaseControllerRequest(BaseModel):
     ts      : Timestamp
@@ -38,31 +39,44 @@ class BaseControllerRequest(BaseModel):
             , 'player' : settings.player.model_dump()
         }
 
-    @classmethod
+    @staticmethod
     def build(
         cls, request=None
     ):
         return cls(
             **BaseControllerRequest._base_params()
-            , request=request
+            , request=request.model_dump()
+        )
+
+    def _build_url(self):
+        return str(self.url) + self.request._route.value
+
+    def to_request_payload(self):
+        return (
+            self._build_url()
+            , self.request.model_dump()
         )
 
 class NewGameControllerRequest(BaseControllerRequest):
     request : NewGameRequest
 
-    @staticmethod
-    def build(**kw):
+    @classmethod
+    def build(cls, **kw):
         return BaseControllerRequest.build(
-            request=NewGameParams(**kw)
+            cls
+            , request=NewGameParams(
+                playerId=settings.player.id
+                , **kw
+            )
         )
 
 class DecideNextControllerRequest(BaseControllerRequest):
     request : DecideNextRequest
 
-    @staticmethod
-    def build(**kw):
+    @classmethod
+    def build(cls, **kw):
         return BaseControllerRequest.build(
-            request=DecideNextParams(**kw)
+            cls, request=DecideNextParams(**kw)
         )
 
 class BaseGameResponse(BaseModel):
@@ -75,3 +89,18 @@ class NewGameResponse(BaseGameResponse):
 class DecideNextResponse(BaseGameResponse):
     request  : DecideNextControllerRequest
     response : DecideNextResponseT
+
+GameRequestT = (
+    DecideNextControllerRequest
+    | NewGameControllerRequest
+)
+
+class ErrorResponse(BaseGameResponse):
+    request  : GameRequestT
+    response : Any
+
+GameResponseT = (
+    NewGameResponse
+    | DecideNextResponse
+    | ErrorResponse
+)

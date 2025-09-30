@@ -1,7 +1,7 @@
 from core.datatypes.sequence  import Sequence
 
-from pydantic import BaseModel, RootModel, UUID4
-from enum import StrEnum
+from pydantic import BaseModel, RootModel, UUID4, PrivateAttr
+from enum import StrEnum, IntEnum
 
 class GameStatus(StrEnum):
     RUNNING   = 'running'
@@ -23,6 +23,7 @@ class Player(BaseModel):
     username : str
 
 class NewGameParams(BaseModel):
+    playerId : UUID4
     scenario : GameScenario
 
 class DecideNextParams(BaseModel):
@@ -31,15 +32,19 @@ class DecideNextParams(BaseModel):
     accept      : bool | None = None
 
 class BaseGameRequest(BaseModel):
-    route : GameRoute
+    _route : GameRoute = PrivateAttr()
 
 class NewGameRequest(BaseGameRequest):
-    route    : GameRoute = GameRoute.NEW_GAME
+    _route   : GameRoute = PrivateAttr(
+        default=GameRoute.NEW_GAME
+    )
     scenario : GameScenario
     playerId : UUID4
 
 class DecideNextRequest(BaseGameRequest):
-    route       : GameRoute = GameRoute.DECIDE_AND_NEXT
+    _route      : GameRoute = PrivateAttr(
+        default=GameRoute.DECIDE_AND_NEXT
+    )
     gameId      : UUID4
     personIndex : int = 0
     accept      : bool | None = None
@@ -47,6 +52,19 @@ class DecideNextRequest(BaseGameRequest):
 class GameConstraint(BaseModel):
     attribute : str
     minCount  : int
+
+class UnknownPersonAttributes(RootModel[dict[str, bool]]):
+    ...
+
+class PersonAttributes(BaseModel):
+    ...
+
+class Person(BaseModel):
+    personIndex : int
+    attributes  : (
+        PersonAttributes
+        | UnknownPersonAttributes
+    )
 
 class UnknownRelativeFrequencies(RootModel[dict[str, float]]):
     ...
@@ -62,7 +80,8 @@ class RelativeFrequencies(BaseModel):
 
     Initially data will come from the Unknown* types above
     """
-    ...
+    well_dressed : float | None = None
+    young        : float | None = None
 
 class Correlations(BaseModel):
     """
@@ -72,12 +91,12 @@ class Correlations(BaseModel):
 
 class GameAttributeStatistics(BaseModel):
     relativeFrequencies : (
-        UnknownRelativeFrequencies
-        | RelativeFrequencies
+        RelativeFrequencies
+        | UnknownRelativeFrequencies
     )
     correlations : (
-        UnknownCorrelations
-        | Correlations
+        Correlations
+        | UnknownCorrelations
     )
 
 class NewGameResponse(BaseModel):
